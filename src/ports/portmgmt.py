@@ -23,9 +23,21 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+import os
+import time
+import re
+import fnmatch
 
 from . import port
 from . import portstree
+
+
+def compare_ports(a, b):
+    return cmp(a[0].lower(), b[0].lower())
+
+def compare_port_version(a, b):
+    return cmp(a[1].lower(), b[1].lower())
+
 # get all installed ports and their corresponding version
 # ports are directories under /var/db/pkg
 # eg:

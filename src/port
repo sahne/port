@@ -58,12 +58,6 @@ port [command] [options]
 '''
 
 ### HELPER FUNCTIONS ###
-def compare_ports(a, b):
-    return cmp(a[0].lower(), b[0].lower())
-
-def compare_port_version(a, b):
-    return cmp(a[1].lower(), b[1].lower())
-
 def find_port (ports, origin):
     for tmp in ports:
         if (tmp[2] == origin):
@@ -76,85 +70,12 @@ def find_port_by_name (ports, name):
             return tmp
     return None
 
-# get currently used (?) index
-def get_index():
-    path = '/usr/ports'
-    # XXX change this if FreeBSD 10 is released
-    try:
-        tmp_idx = os.listdir(path)
-    except OSError as ose:
-        print "/usr/ports missing ?"
-        return None
-    else:
-        tmp2_idx = fnmatch.filter(tmp_idx, 'INDEX-[0-9]')
-        tmp2_idx.sort()
-        tmp2_idx.reverse()
-        return "/usr/ports/" + tmp2_idx[0]
-
-# get all installed ports and their corresponding version
-# ports are directories under /var/db/pkg
-# eg:
-# /var/db/pkg/vim-7.2.411/
-def get_installed_ports():
-    ports = []
-    for port in os.listdir('/var/db/pkg'):
-        # ignore portupgrades pkgdb.db
-        # TODO check if port is a directory, else ignore
-        if (port == "pkgdb.db"):
-            continue
-        tmp = port.split('-')
-        portversion = ''.join(tmp[-1:])
-        portname = '-'.join(tmp[:-1])
-        # get origin for package (needed since some packages do not use
-        # the same name as the port has), eg: apache-2.2 -> www/apache22
-        # TODO check if file exists !
-        origin = ''
-        try:
-            ftmp = open('/var/db/pkg/' + port + '/+CONTENTS')
-            for line in ftmp.readlines():
-                if (line.startswith('@comment ORIGIN')):
-                    origin = line[line.find(':')+1:-1]
-                    break
-            ftmp.close()
-        except IOError as ioe:
-            print "ERROR: could not open +CONTENTS for %s" % port
-        #print 'DEBUG found port %s, %s, %s' % (portname, portversion, origin)
-        ports.append((portname, portversion, origin))
-    ports.sort(compare_ports)
-    return ports
-
-# get all ports from INDEX 
-def get_all_ports():
-    ports = []
-    idx_path = get_index()
-    # check if INDEX is up to date
-    idx_mtime = os.stat(idx_path).st_mtime
-    if ((idx_mtime + 14*24*60*60) < time.time()):
-        print "WARNING: portstree is older than 14 days"
-        print "Please update tree using ``port sync``"
-    idx_file = open(idx_path,'r')
-    for line in idx_file.readlines():
-        port = line[:line.find('|')]
-        tmp = port.split('-')
-        # get port name and version
-        portversion = ''.join(tmp[-1:])
-        portname = '-'.join(tmp[:-1])
-        tmp_len = len(port) + 1
-        # get port directory
-        origin = line[tmp_len:line.find('|', tmp_len)]
-        origin = origin.replace('/usr/ports/','')
-        #print "DEBUG: found port %s, %s, %s" % (portname, portversion, origin)
-        ports.append((portname, portversion, origin))
-    idx_file.close()
-    ports.sort(compare_ports)
-    return ports
-
 # check if ports are outdated and need update
 def check_outdated_ports(ports=None, all_ports=None):
     if (ports == None):
-        ports = get_installed_ports()
+        ports = portmgmt.get_installed_ports()
     if (all_ports == None):
-        all_ports = get_all_ports()
+        all_ports = portmgmt.get_all_ports()
     outdated = []
     for port in ports:
         # check of port is in all_ports (list compare)
@@ -300,7 +221,7 @@ def show(args):
         return 1
 
     cmd = args[0]
-    ports_installed = get_installed_ports()
+    ports_installed = portmgmt.get_installed_ports()
     if (cmd == "installed"):
         print "%-30s\tVersion" % 'Portname'
         for port in ports_installed:
@@ -342,8 +263,8 @@ def sync(args, debug=1):
 # but is then called ap22-mod_limitipconn
 def search(regex):
     #search portstree for regex
-    installed_ports = get_installed_ports()
-    ports = get_all_ports()
+    installed_ports = portmgmt.get_installed_ports()
+    ports = portmgmt.get_all_ports()
     matcher = re.compile(regex[0])
     print '  %-25s\t%-20s\t%s' % ("Portname", "Version", "Path")
     print ' ','-' * 78
@@ -364,7 +285,7 @@ def install(ports):
         return 1
     print "installing port"
     tmp_ports = []
-    all_ports = get_all_ports()
+    all_ports = portmgmt.get_all_ports()
     for port in ports:
         tmp = find_port_by_name(all_ports,port)
         if (tmp == None):
@@ -372,7 +293,7 @@ def install(ports):
         else:
             tmp_ports.append(tmp)
     ports = tmp_ports
-    installed_ports = get_installed_ports()
+    installed_ports = portmgmt.get_installed_ports()
     for port in ports:
         if (port in installed_ports):
             print port[0], "already installed !"
@@ -388,7 +309,7 @@ def update(ports):
         ports = check_outdated_ports()
     else:
         tmp_ports = []
-        all_ports = get_all_ports()
+        all_ports = portmgmt.get_all_ports()
         for port in ports:
             tmp = find_port_by_name(all_ports,port)
             if (tmp == None):
@@ -396,7 +317,7 @@ def update(ports):
             else:
                 tmp_ports.append(tmp)
         ports = tmp_ports
-    installed_ports = get_installed_ports()
+    installed_ports = portmgmt.get_installed_ports()
     # update ports
     for port in ports:
         # lets use the easy approach first :)
@@ -415,8 +336,8 @@ def update(ports):
 def remove(ports):
     if (ports == None):
         return 1
-    installed_ports = get_installed_ports()
-    all_ports = get_all_ports()
+    installed_ports = portmgmt.get_installed_ports()
+    all_ports = portmgmt.get_all_ports()
     tmp_ports = []
     for port in ports:
         tmp = find_port_by_name(installed_ports, port)
