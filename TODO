@@ -1,6 +1,0 @@
-* Installation routine
-	-> install docs (README, etc) under $PREFIX/share/doc/port-0.1/
-
-* create port ports-mgmt/port
-* write README and TODO
-* write CHANGELOG
