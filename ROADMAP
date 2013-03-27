@@ -1,0 +1,45 @@
+Version 0.1 (due to October 1st)
+* MAN PAGE !
+* tcsh completion
+* complete ports management with given structures
+	-> no dependency checking
+	-> use ports path to determine port with other package names 					[DONE]
+	-> how to handle ports with same namebut different versions (eg: apache, postgres, etc)		[DONE]
+	-> add knobs handling (via make.conf)
+* add wiki entry to it-syndikat wiki
+* announce in forums.freebsd.org
+* add project to sf (with bugtracking)
+* announce on ports@
+* use it as primary ports-management tool
+
+Version 0.2 (due to november 1st)
+* change port datastructure into a class
+	class port:
+	  name
+	  path
+	  version
+	  needed by
+	  comment
+	  category (?)
+	  build deps (list of classes) [ports]
+	  run deps (list of classes) [ports]
+	  options (hash)
+
+* add support for MOVED and UPDATE
+* add support for different portstree location 
+* announce in forums.freebsd.org
+* announce on ports@
+* commit new port PR
+* bash completion (?)
+* open for new developers (selectivly)
+
+Version 0.3 (due to december 1st)
+* Documentation
+* Refactoring
+* Code Cleanup
+* 100 Users (hard to count) [not if hosted on 0x90.at (docu) and svn]
+
+Version 0.4 (due to january 1st [ccc bonus])
+* implement requested feature (at least one)
+* talk with users on CCC
+* 

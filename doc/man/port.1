@@ -1,0 +1,89 @@
+.Dd January 10, 2013
+.Dt PORT 1
+.Os
+.Sh NAME
+.Nm port
+.Nd manage ports
+.Sh SYNOPSIS
+.Nm
+.Op command 
+.Op option
+.Sh DESCRIPTION
+port is a ports management tool. It allows you to keep the ports tree in sync,
+install new ports, keep all installed ports up-to-date.
+.Sh COMMANDS
+.Ss install [portname ...]
+Install new ports.
+.Ss remove [portname ...]
+Remove given ports.
+.Ss update [outdated|portname ...]
+Update either all outdated ports, or a given port
+.Ss search [regex]
+Display all available ports matching a given regex
+.Ss sync
+Keep the ports tree in sync (depends on portsnap)
+.Ss show [installed|outdated]
+Show either all installed ports or ports that need to be updated
+.Sh EXAMPLES
+.Bl -bullet
+.It
+Search
+.Ar hgrep
+.Pp
+.Dl port search hgrep
+.Pp
+Search for hgrep in the portstree
+.El
+.Bl -bullet
+.It
+Install
+.Ar hgrep
+.Pp
+.Dl port install hgrep
+.Pp
+This will install hgrep from the ports tree
+.Pp
+.El
+.Bl -bullet
+.It
+Update
+.Ar hgrep
+.Pp
+.Dl port update hgrep
+.Pp
+Install a updated version of hgrep if available
+.El
+.Bl -bullet
+.It
+Show and update all outdated ports
+.Pp
+.Dl port show outdated
+.Pp
+Display all ports installed where a newer version is available
+.Pp
+.Dl port update outdated
+.Pp
+Update all previously shown ports
+.El
+.Bl -bullet
+.It
+Remove
+.Ar hgrep
+.Pp
+.Dl port remove hgrep
+.Pp
+Deinstalls hgrep.
+.Sh SEE ALSO
+.Xr ports 7 ,
+.Xr portsnap 8 ,
+.Xr pkg_add 1 ,
+.Xr pkg_deinstall 1 ,
+.Xr pkg_delete 1 ,
+.Xr pkg_info 1
+.Sh BUGS AND LIMITATIONS
+.Pp
+Currently the ports tree must be located under /usr/ports.
+pkg-ng is currently not supported and port will not work on
+migrated systems.
+.Sh AUTHORS
+.An Daniel WALTER Aq d.walter@0x90.at

@@ -1,0 +1,461 @@
+#!/usr/bin/env python
+#
+# Copyright (c) 2010 Daniel Walter <d.walter@0x90.at>
+#
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+
+import os
+import sys
+import subprocess
+import time
+import re
+import fnmatch
+
+from ports import *
+
+# data structure
+# port = (portname, portversion, origin)
+# all_ports = (portname, portversion, origin)
+# installed_ports = (portname, portversion, origin)
+# outdated_port = (portname, portversion, portversion_new, origin)
+
+def usage():
+    print '''\
+port [command] [options]
+     [COMMANDS]
+        help [command]\tget help to a specific command
+        sync          \tsync the ports tree (replaces portsnap fetch update)
+        show [options]
+             [OPTIONS]
+             -  installed\tget a list of currently installed ports
+             -  outdated\tget a list of outdated ports
+        search [regex]\tsearch portstree
+        install [portname]
+        update [portname|outdated]
+        remove [portname]
+	config [portname]
+	showconfig [portname]
+'''
+
+### HELPER FUNCTIONS ###
+def compare_ports(a, b):
+    return cmp(a[0].lower(), b[0].lower())
+
+def compare_port_version(a, b):
+    return cmp(a[1].lower(), b[1].lower())
+
+def find_port (ports, origin):
+    for tmp in ports:
+        if (tmp[2] == origin):
+            return tmp
+    return None
+
+def find_port_by_name (ports, name):
+    for tmp in ports:
+        if (tmp[0] == name):
+            return tmp
+    return None
+
+# get currently used (?) index
+def get_index():
+    path = '/usr/ports'
+    # XXX change this if FreeBSD 10 is released
+    try:
+        tmp_idx = os.listdir(path)
+    except OSError as ose:
+        print "/usr/ports missing ?"
+        return None
+    else:
+        tmp2_idx = fnmatch.filter(tmp_idx, 'INDEX-[0-9]')
+        tmp2_idx.sort()
+        tmp2_idx.reverse()
+        return "/usr/ports/" + tmp2_idx[0]
+
+# get all installed ports and their corresponding version
+# ports are directories under /var/db/pkg
+# eg:
+# /var/db/pkg/vim-7.2.411/
+def get_installed_ports():
+    ports = []
+    for port in os.listdir('/var/db/pkg'):
+        # ignore portupgrades pkgdb.db
+        # TODO check if port is a directory, else ignore
+        if (port == "pkgdb.db"):
+            continue
+        tmp = port.split('-')
+        portversion = ''.join(tmp[-1:])
+        portname = '-'.join(tmp[:-1])
+        # get origin for package (needed since some packages do not use
+        # the same name as the port has), eg: apache-2.2 -> www/apache22
+        # TODO check if file exists !
+        origin = ''
+        try:
+            ftmp = open('/var/db/pkg/' + port + '/+CONTENTS')
+            for line in ftmp.readlines():
+                if (line.startswith('@comment ORIGIN')):
+                    origin = line[line.find(':')+1:-1]
+                    break
+            ftmp.close()
+        except IOError as ioe:
+            print "ERROR: could not open +CONTENTS for %s" % port
+        #print 'DEBUG found port %s, %s, %s' % (portname, portversion, origin)
+        ports.append((portname, portversion, origin))
+    ports.sort(compare_ports)
+    return ports
+
+# get all ports from INDEX 
+def get_all_ports():
+    ports = []
+    idx_path = get_index()
+    # check if INDEX is up to date
+    idx_mtime = os.stat(idx_path).st_mtime
+    if ((idx_mtime + 14*24*60*60) < time.time()):
+        print "WARNING: portstree is older than 14 days"
+        print "Please update tree using ``port sync``"
+    idx_file = open(idx_path,'r')
+    for line in idx_file.readlines():
+        port = line[:line.find('|')]
+        tmp = port.split('-')
+        # get port name and version
+        portversion = ''.join(tmp[-1:])
+        portname = '-'.join(tmp[:-1])
+        tmp_len = len(port) + 1
+        # get port directory
+        origin = line[tmp_len:line.find('|', tmp_len)]
+        origin = origin.replace('/usr/ports/','')
+        #print "DEBUG: found port %s, %s, %s" % (portname, portversion, origin)
+        ports.append((portname, portversion, origin))
+    idx_file.close()
+    ports.sort(compare_ports)
+    return ports
+
+# check if ports are outdated and need update
+def check_outdated_ports(ports=None, all_ports=None):
+    if (ports == None):
+        ports = get_installed_ports()
+    if (all_ports == None):
+        all_ports = get_all_ports()
+    outdated = []
+    for port in ports:
+        # check of port is in all_ports (list compare)
+        if (not (port in all_ports)):
+            newversion = find_port(all_ports, port[2])
+            # either portname differ or version
+            if (newversion):
+                # if versions are equal -> port and package name differ
+                # eg. ap22-mod_limitipconn, ignore !
+                if (newversion[1] != port[1]):
+                    outdated.append((port[0], port[1], newversion[1], port[2]))
+    return outdated
+
+# run make for a port
+# params:
+# portpath  .. path to port w/o prefix
+# cmd       .. make parameter, None for make itself
+# debug     .. enable/disable debug output (default is enable)
+# 
+# returns 0 on success, 1 else
+# TODO: throw exception on error 
+def port_make (portpath, cmd, debug=1):
+    # supported commands
+    # XXX add supported commands here if needed
+    make_commands = [
+             "install",
+             "clean",
+             "deinstall",
+             "reinstall",
+             "config",
+             "distclean"
+    ]
+    command = ["make"]
+    if (portpath == None or portpath == ""):
+        return 1
+    if (cmd == None):
+        pass
+    elif (cmd in make_commands):
+        command.append(cmd)
+    else:
+        return 1
+    retval = 0
+    port_path = '/usr/ports/' + portpath
+    # check if path exists
+    if (not (os.path.exists(port_path))):
+        if (debug):
+            print "port %s could not be found" % (portpath)
+        return 1
+    old_path = os.getcwd()
+    os.chdir(port_path)
+    port_make = None
+    if (debug):
+        port_make = subprocess.Popen(command,
+                                     stderr=subprocess.PIPE)
+    else:
+        port_make = subprocess.Popen(command,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE)
+    port_make.wait()
+    output_make = port_make.communicate()
+    # print error if make failed
+    # XXX raise exception with error string
+    if (port_make.returncode == 1):
+        print "make failed"
+        if (debug):
+            error = output_make[0]
+        else:
+            error = output_make[1]
+        print "error was : %s" % (error)
+        retval = 1
+    os.chdir(old_path)
+    return retval
+
+# update a specific port 
+# it uses make deinstall and make reinstall to update a port
+# XXX implement config and disable debug output per default 
+# XXX check dependencies ?
+def update_port(port, debug=1):
+    if (port == None):
+        return 1
+    # run port make first
+    print "building new port"
+    if (port_make(port[2], None, debug)):
+        print "building new port %s-%s failed" % (port[0], port[2])
+        return 1
+    # deinstall old port
+    if (port_make(port[2], "deinstall", debug)):
+        print "deinstalling old port %s-%s failed" % (port[0], port[1])
+        return 1
+    # install new port
+    if (port_make(port[2], "reinstall", debug)):
+        print "reinstalling old port %s-%s failed" % (port[0], port[1])
+        return 1
+    # clean up
+    if (port_make(port[2], "clean", debug)):
+        print "make clean failed for %s" % (port[0])
+        return 1
+    return 0
+
+
+# install port
+# XXX very noisy, no config yet
+# XXX check dependencies !
+def install_port(port, debug=1):
+    if (port == None):
+        return 1
+    # call make configure
+    print "configuring %s" % port[0]
+    if (port_make(port[2], "config", debug)):
+        print "could not configure port %s" % (port[0])
+        return 1
+    # call make deinstall && make reinstall 
+    print "installing %s" % port[0]
+    if (port_make(port[2], "install", debug)):
+        print "could not install %s" % (port[0])
+        return 1
+    print "port %s installed" % port[0]
+    return 0
+
+# remove port
+# XXX very noisy, no config yet
+# XXX check dependencies !
+def remove_port(port, debug=1):
+    if (port == None):
+        return 1
+    if (port_make(port[2], "deinstall", debug)):
+        print "could not remove port %s" % (port[0])
+        return 1
+    if (port_make(port[2], "distclean", debug)):
+        print "could not remove distfiles for  %s" % (port[0])
+        return 1
+    print "port %s removed" % port[0]
+    return 0
+
+### COMMANDS ###
+def help(args):
+    usage()
+    return 0
+
+def show(args):
+    if (len(args) < 1):
+        usage()
+        return 1
+
+    cmd = args[0]
+    ports_installed = get_installed_ports()
+    if (cmd == "installed"):
+        print "%-30s\tVersion" % 'Portname'
+        for port in ports_installed:
+            print "%-30s\t%s" % (port[0], port[1])
+    elif (cmd == "outdated"):
+        # find outdated ports
+        # XXX cannot handle port with other pkgnames than portnames
+        # XXX eg: ap22-mod_limitipconn, etc ...
+        ports_outdated = check_outdated_ports(ports_installed,None)
+        print "%-30s\tVersion" % 'Portname'
+        for port in ports_outdated:
+            print "%-30s\t%s  <  %s" % (port[0], port[1], port[2])
+    elif (cmd == "security-updates"):
+        print "show security-updates"
+    else:
+        print "unrecognized command",cmd
+        return 1
+
+# sync portstree
+# currently it is using portsnap since it is part of
+# the FreeBSD base installation
+# this may be changed in future revisions
+def sync(args, debug=1):
+    # check if portstree exist or exit 
+    print "syncing tree"
+    tree = portstree.PortsTree()
+    try:
+        tree.sync()
+    except Exception as e:
+        print "Could not sync ports-tree"
+        print e
+        return 1
+    print "Portstree is synced now!"
+    print "Check outdated ports with ``port show outdated``"
+    return 0
+
+# search for given regex
+# TODO: ap20-mod_limitipconn is also used for apache22
+# but is then called ap22-mod_limitipconn
+def search(regex):
+    #search portstree for regex
+    installed_ports = get_installed_ports()
+    ports = get_all_ports()
+    matcher = re.compile(regex[0])
+    print '  %-25s\t%-20s\t%s' % ("Portname", "Version", "Path")
+    print ' ','-' * 78
+    for port in ports:
+        if (matcher.match(port[0])):
+            # prepend i for installed ports
+            if (find_port(installed_ports, port[2])):
+                print "i %-25s\t%-20s\t%s" % port
+            else:
+                print "  %-25s\t%-20s\t%s" % port
+
+    return 0
+
+def install(ports):
+    # TODO get ports from list and build dependency map to check if we can
+    # skip the installation of any of them
+    if (ports == None):
+        return 1
+    print "installing port"
+    tmp_ports = []
+    all_ports = get_all_ports()
+    for port in ports:
+        tmp = find_port_by_name(all_ports,port)
+        if (tmp == None):
+            print "port", port, "could not be found"
+        else:
+            tmp_ports.append(tmp)
+    ports = tmp_ports
+    installed_ports = get_installed_ports()
+    for port in ports:
+        if (port in installed_ports):
+            print port[0], "already installed !"
+            continue
+        print "DEBUG installing %s-%s" % (port[0], port[1])
+        install_port(port)
+        print port[0], "installed"
+
+def update(ports):
+    if (ports == None):
+        return 1
+    elif (ports[0] == 'outdated'):
+        ports = check_outdated_ports()
+    else:
+        tmp_ports = []
+        all_ports = get_all_ports()
+        for port in ports:
+            tmp = find_port_by_name(all_ports,port)
+            if (tmp == None):
+                print "port", port, "could not be found"
+            else:
+                tmp_ports.append(tmp)
+        ports = tmp_ports
+    installed_ports = get_installed_ports()
+    # update ports
+    for port in ports:
+        # lets use the easy approach first :)
+        # XXX calc dependencies first !
+        print port
+        if (port in installed_ports):
+            print "%s already up-to-date" % port[0]
+        elif (find_port(installed_ports,port[2])):
+            print "updating ", port[0]
+            update_port(port)
+        else:
+            print port[0], "not installed"
+            print "please use ``port install %s`` to install it" % port[0]
+    return 0
+
+def remove(ports):
+    if (ports == None):
+        return 1
+    installed_ports = get_installed_ports()
+    all_ports = get_all_ports()
+    tmp_ports = []
+    for port in ports:
+        tmp = find_port_by_name(installed_ports, port)
+        if (tmp == None):
+            print "port", port, "not found"
+        else:
+            tmp_ports.append(tmp)
+    ports = tmp_ports
+    for port in ports:
+        remove_port(port)
+        print "removed", port[0] 
+    return 0
+
+# hash of commands
+commands = {
+    'help' : help,
+    'show' : show,
+    'sync' : sync,
+    'search' : search,
+    'install' : install,
+    'update' : update,
+    'remove' : remove,
+}
+
+### MAIN ###
+if (len(sys.argv) < 2):
+    usage()
+    sys.exit(1)
+
+old_cwd = os.getcwd()
+command = sys.argv[1]
+args = sys.argv[2:]
+ret = 0
+try:
+    ret = commands[command](args)
+except Exception, e:
+    print e
+
+os.chdir(old_cwd)
+sys.exit(ret)

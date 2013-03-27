@@ -1,0 +1,59 @@
+data-structures
+port
+	[0] .. name
+	[1] .. version
+	[2] .. origin
+
+outdated
+	[0] .. name
+	[1] .. installed version
+	[2] .. version in ports-tree
+	[3] .. origin
+
+functions
+
+def usage():
+	print usage
+def compare_ports(a, b):
+	compare ports_name
+def compare_port_version(a, b):
+	compare ports version
+	used by check_outdated
+def find_port (ports, origin):
+	find port by origin
+def find_port_by_name (ports, name):
+	find port by name
+def get_index():
+	get used INDEX file form /usr/ports
+	CHANGE THIS IF FreeBSD 10 is released or INDEX-$(REV) is not used
+	anymore
+def get_installed_ports():
+	get a list of installed ports
+	see above specification for datastructure port
+def get_all_ports():
+	get a list of all ports available
+	see above specification for datastructure port
+def check_outdated_ports(ports=None, all_ports=None):
+	get a list of installed but outdated ports
+	see above specification for datastructure outdated
+def update_port(port, debug=1):
+	update a port
+	-> calls make deinstall
+	-> calls make reinstall
+def install_port(port, debug=1):
+	install a port
+	-> calls make config
+	-> calls make install
+def remove_port(port, debug=1):
+	remove port
+	-> call make deinstall
+def help(args):
+	atm a wrapper for usage
+def show(args):
+	show either installed ports, all ports, or outdated ports
+	TODO: show port information (detailed)
+def sync(args, debug=1):
+def search(regex):
+def install(ports):
+def update(ports):
+def remove(ports):

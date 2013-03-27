@@ -1,0 +1,31 @@
+integrate knobs
+integrate config
+integrate dependency checking
+integrate check for installed dependencies
+
+integrate logging for install/remove/update per port !
+integrate -v for verbose output (debug=1)
+
+add support for config file
+add support for subversion / csup additionally to portsnap
+add support for other port locations
+add support for different prefix 
+add support for package creation
+add support for binary packages (?)
+
+
+
+def make_port
+
+throw exception on error with error output as exception text 
+so no return is needed !
+
+----
+support /usr/ports/MOVED
+support /usr/ports/UPDATING
+support /etc/make.conf 
+	-> .if${CURDIR:M*ports/*}
+		WITHOUT_KNOB=yes
+		WITH_OTHERKNOB=yes
+	   .endif
+

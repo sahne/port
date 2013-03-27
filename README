@@ -1,0 +1,40 @@
+port is a simple tool to help you to manage your installed ports.
+it provides a easy to use interface for installing, updating and 
+removing ports.
+
+WARNING: this is still an unstable release, so DO NOT USE IT IN
+PRODUCTION ENVIRONMENTS, you have been warned !
+
+INSTALL
+python setup.py build
+python setup.py install
+
+it will install itself under /usr/local (or any prefix specified via 
+--prefix)
+
+for more information see port(1)
+
+QUICK INTRO
+* updating ports
+port sync (sync port)
+port show outdated (show outdated ports)
+port update outdated (update all outdated ports)
+
+* installing a port
+port install [portname ..]
+* remove a port
+port remove [portname ..]
+* search a port
+port search [regex]
+
+EXAMPLE
+searching, installing, updating and removing hgrep
+port search hgrep
+port install hgrep
+port sync
+port update hgrep
+port remove hgrep
+
+LIMITATIONS
+currently ports must be under /usr/ports (will change in the future)
+no support for other PREFIX (will change)

@@ -1,0 +1,16 @@
+portstree.py
+   Class PortsTree
+	-> init:
+		check if portstree exists
+		check if portsnap is executable
+	-> sync:
+		call portsnap fetch update
+
+	-> get_index:
+		get index file
+	-> get_all_ports:
+		
+
+ports.py
+   Class Port
+	-> init:

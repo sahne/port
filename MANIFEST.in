@@ -1,0 +1,5 @@
+recursive-include doc *
+recursive-include src *
+include port_complete.csh
+include TODO
+include README
