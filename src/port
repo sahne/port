@@ -55,8 +55,6 @@ port [command] [options]
         install [portname]
         update [portname|outdated]
         remove [portname]
-	config [portname]
-	showconfig [portname]
 '''
 
 ### HELPER FUNCTIONS ###
